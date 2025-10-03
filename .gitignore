@@ -1,0 +1,8 @@
+# Java/NetBeans
+nbproject/private/
+build/
+dist/
+target/
+*.class
+*.log
+.DS_Store
