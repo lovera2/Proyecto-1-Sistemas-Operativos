@@ -4,30 +4,23 @@
  */
 package Componentes;
 
+import Estructuras.Cola;
 
 /**
  *
  * @author luismarianolovera
  */
 public class Kernel extends Thread {
-    private MemoriaPrincipal memoria;
+     private MemoriaPrincipal memoria;
     private Planificador planificador;
     private CPU cpu;
-
     private int reloj;
     private int duracionCicloMS;
     private int duracionBloqueoIO;
-
     private volatile boolean corriendo;
+    private Cola<String> logEventos;
+    private int limiteProcesosEnMemoria;
 
-    /**
-     * Crea el kernel y la CPU.
-     *
-     * @param politica política de planificación inicial
-     * @param quantumRR quantum inicial (para RR / Feedback)
-     * @param duracionBloqueoIO ciclos que dura un bloqueo de E/S
-     * @param duracionCicloMS duración de cada ciclo del reloj en ms
-     */
     public Kernel(
             Planificador.PoliticaPlanificacion politica,
             int quantumRR,
@@ -42,96 +35,152 @@ public class Kernel extends Thread {
         this.duracionCicloMS = duracionCicloMS;
         this.duracionBloqueoIO = duracionBloqueoIO;
         this.corriendo = true;
-
         this.cpu = new CPU(0, this);
+
+        this.logEventos = new Cola<String>();
+        this.limiteProcesosEnMemoria = 5; // valor base para decidir suspensión
     }
 
     /**
-     * Inicia el hilo de la CPU.
-     * (El kernel se inicia con start() aparte).
+     * Arranca el hilo de la CPU.
+     * (El hilo del Kernel se arranca con this.start() desde main.)
      */
     public void iniciarCPU() {
         cpu.start();
     }
 
     /**
-     * Bucle principal del kernel.
-     * Avanza el reloj, mueve procesos y despacha a CPU.
+     * Bucle principal del Kernel.
+     * Avanza el reloj del sistema y coordina planificación.
      */
     @Override
     public void run() {
         while (corriendo) {
 
+            // 1. Si la CPU está libre, le damos un proceso listo
             despacharProcesoACPU();
 
+            // 2. Actualizamos bloqueos de E/S y suspensiones
             memoria.tickBloqueados();
             memoria.tickBloqueadosSuspendidos();
 
+            // 3. Sumamos espera a los procesos que están listos
             planificador.incrementarEspera(memoria);
 
+            // control de suspensión / swap
+            controlarSuspension();
+
+            // 4. Avanzar reloj global
             reloj = reloj + 1;
 
+            // 5. Dormir un ciclo "de SO"
             try {
                 Thread.sleep(duracionCicloMS);
             } catch (InterruptedException e) {
-                // ignorar interrupción suave
+                // no hacemos nada especial
             }
         }
 
+        // Cuando salimos del while, apagamos la CPU
         apagarCPU();
     }
 
     /**
-     * Si la CPU está libre, asigna un proceso LISTO a ejecución.
+     * Si la CPU está libre, se selecciona un proceso listo usando
+     * la política de planificación y se carga en la CPU.
      */
     private void despacharProcesoACPU() {
         if (cpu.estaLibre()) {
             PCB candidato = planificador.seleccionar(memoria);
             if (candidato != null) {
                 cpu.asignarProceso(candidato, reloj);
+                agregarLog("Ciclo " + reloj + ": CPU toma proceso "
+                        + candidato.getNombre() + " (PID " + candidato.getId() + ")");
             }
         }
     }
 
     /**
-     * Detiene el kernel (sale del run()).
+     * Rutina sencilla de suspensión / reactivación.
+     * Si hay demasiados procesos en memoria principal (listos+bloqueados),
+     * se suspende uno. Si hay espacio libre, se reactiva uno.
      */
-    public void detenerKernel() {
-        corriendo = false;
+    private void controlarSuspension() {
+        int enListos = memoria.tamanoListos();
+        int enBloqueados = memoria.tamanoBloqueados();
+        int totalEnMem = enListos + enBloqueados;
+
+        // demasiados procesos cargados => intentar suspender
+        if (totalEnMem > limiteProcesosEnMemoria) {
+            PCB suspendido = memoria.suspenderPrimeroListo();
+            if (suspendido == null) {
+                suspendido = memoria.suspenderPrimeroBloqueado();
+            }
+            if (suspendido != null) {
+                agregarLog("Ciclo " + reloj + ": Proceso "
+                        + suspendido.getNombre() + " (PID " + suspendido.getId()
+                        + ") pasa a SUSPENDIDO");
+            }
+        }
+
+        // hay espacio => intentar reactivar un suspendido
+        if (totalEnMem < limiteProcesosEnMemoria) {
+            PCB reactivado = memoria.reactivarListoSuspendido();
+            if (reactivado != null) {
+                agregarLog("Ciclo " + reloj + ": Proceso "
+                        + reactivado.getNombre() + " (PID " + reactivado.getId()
+                        + ") vuelve a LISTO desde SUSPENDIDO");
+            }
+        }
     }
 
     /**
-     * Detiene la CPU cuando el kernel ya terminó.
+     * Detiene el kernel.
+     * Esto hace que el run() salga de su ciclo.
+     */
+    public void detenerKernel() {
+        corriendo = false;
+        agregarLog("Ciclo " + reloj + ": Kernel detenido por el usuario");
+    }
+
+    /**
+     * Apaga la CPU al final de la simulación.
      */
     private void apagarCPU() {
         cpu.detenerCPU();
     }
 
     /**
-     * Admite un proceso nuevo al sistema (lo pone en LISTO).
+     * Admite un proceso nuevo al sistema.
+     * Lo mete en estado LISTO mediante el planificador.
      *
-     * @param pcb proceso que llega
+     * @param pcb Proceso que llega al sistema.
      */
     public void admitirProceso(PCB pcb) {
         if (pcb == null) {
             return;
         }
         planificador.encolar(pcb, memoria);
+        agregarLog("Ciclo " + reloj + ": Proceso "
+                + pcb.getNombre() + " (PID " + pcb.getId()
+                + ") admitido al sistema (LISTO)");
     }
 
     /**
-     * Cambia la política de planificación en vivo.
+     * Cambia la política de planificación en tiempo de ejecución.
      *
-     * @param nueva nueva política
+     * @param nueva Nueva política.
      */
     public void cambiarPolitica(Planificador.PoliticaPlanificacion nueva) {
         planificador.setPolitica(nueva, memoria);
+        agregarLog("Ciclo " + reloj + ": Política cambiada a " + nueva);
     }
 
     /**
-     * Aviso de la CPU: el proceso terminó.
+     * La CPU avisa que el proceso terminó toda su ráfaga.
+     * Se mueve a TERMINADO.
      *
-     * @param p proceso que terminó
+     * @param p proceso terminado
      */
     public void notificarTerminado(PCB p) {
         if (p == null) {
@@ -139,34 +188,46 @@ public class Kernel extends Thread {
         }
         p.setEstado(Estado.TERMINADO);
         memoria.moverATerminados(p);
+        agregarLog("Ciclo " + reloj + ": Proceso "
+                + p.getNombre() + " (PID " + p.getId()
+                + ") TERMINADO");
     }
 
     /**
-     * Aviso de la CPU: el proceso pidió E/S.
+     * La CPU avisa que el proceso pidió E/S.
+     * Se pasa a BLOQUEADO por una cantidad fija de ciclos.
      *
-     * @param p proceso bloqueado por E/S
+     * @param p proceso bloqueado
      */
     public void notificarBloqueadoPorIO(PCB p) {
         if (p == null) {
             return;
         }
         memoria.moverABloqueados(p, duracionBloqueoIO);
+        agregarLog("Ciclo " + reloj + ": Proceso "
+                + p.getNombre() + " (PID " + p.getId()
+                + ") BLOQUEADO (E/S)");
     }
 
     /**
-     * Aviso de la CPU: se agotó el quantum.
+     * La CPU avisa que agotó quantum (Round Robin / Feedback).
+     * Lo reencolamos según la política.
      *
-     * @param p proceso que debe volver a listo según la política
+     * @param p proceso que usó todo su quantum
      */
     public void notificarQuantumAgotado(PCB p) {
         if (p == null) {
             return;
         }
         planificador.alExpirarQuantum(p, memoria);
+        agregarLog("Ciclo " + reloj + ": Quantum agotado para proceso "
+                + p.getNombre() + " (PID " + p.getId() + ")");
     }
 
     /**
-     * Aviso de la CPU: desalojar el proceso actual y devolverlo a LISTO.
+     * La CPU avisa que desalojó un proceso porque llegó otro
+     * con ráfaga restante menor (SRT).
+     * Lo regresamos a LISTO.
      *
      * @param p proceso desalojado
      */
@@ -175,59 +236,77 @@ public class Kernel extends Thread {
             return;
         }
         memoria.moverAListos(p);
+        agregarLog("Ciclo " + reloj + ": Proceso "
+                + p.getNombre() + " (PID " + p.getId()
+                + ") desalojado y devuelto a LISTO (SRT)");
     }
 
     /**
-     * Pregunta de la CPU: ¿hay alguien más corto? (SRT)
+     * La CPU pregunta si debe ser expropiado el proceso actual
+     * bajo la política SRT.
      *
      * @param p proceso actual en CPU
-     * @return true si debe ser expropiado
+     * @return true si hay otro más corto esperando
      */
     public boolean debeExpropiarSRT(PCB p) {
         return planificador.debeExpropiarSRT(p, memoria);
     }
 
     /**
-     * @return número de ciclo global
+     * Devuelve el número de ciclo actual.
      */
     public int getReloj() {
         return reloj;
     }
 
     /**
-     * @return duración del ciclo del reloj en ms
+     * Devuelve la duración de un ciclo de reloj en ms.
      */
     public int getDuracionCicloMS() {
         return duracionCicloMS;
     }
 
     /**
-     * Cambia la velocidad de simulación.
-     *
-     * @param nuevaDuracionMS nueva duración en ms
+     * Permite cambiar la velocidad de simulación.
      */
     public void setDuracionCicloMS(int nuevaDuracionMS) {
         this.duracionCicloMS = nuevaDuracionMS;
+        agregarLog("Ciclo " + reloj + ": Velocidad de ciclo = " + nuevaDuracionMS + "ms");
     }
 
     /**
-     * @return referencia a MemoriaPrincipal (colas de listos, bloqueados, etc.)
+     * Para que la interfaz (cuando la hagamos) pueda ver
+     * las colas y estados.
      */
     public MemoriaPrincipal getMemoria() {
         return memoria;
     }
 
     /**
-     * @return referencia al planificador actual
+     * Para que la interfaz pueda ver qué política está activa.
      */
     public Planificador getPlanificador() {
         return planificador;
     }
 
     /**
-     * @return referencia a la CPU simulada
+     * Para que la interfaz pueda ver qué proceso está en CPU.
      */
     public CPU getCPU() {
         return cpu;
+    }
+
+    /**
+     * Devuelve el log de eventos (para la interfaz).
+     */
+    public Cola<String> getLogEventos() {
+        return logEventos;
+    }
+
+    /**
+     * Agrega una línea al log interno.
+     */
+    private void agregarLog(String linea) {
+        logEventos.encolar(linea);
     }
 }
