@@ -5,6 +5,7 @@
 package Componentes;
 
 import Estructuras.Cola;
+import java.util.concurrent.Semaphore;
 
 /**
  *
@@ -17,270 +18,591 @@ public class MemoriaPrincipal {
     private Cola<PCB> listosSuspendidos;
     private Cola<PCB> bloqueadosSuspendidos;
 
+    /* Mutex para acceso exclusivo a las colas */
+    private final Semaphore mutexMemoria;
+
+    /**
+     * Constructor. Inicializa todas las colas vacías y el semáforo de control.
+     */
     public MemoriaPrincipal() {
         this.listos = new Cola<PCB>();
         this.bloqueados = new Cola<PCB>();
         this.terminados = new Cola<PCB>();
         this.listosSuspendidos = new Cola<PCB>();
         this.bloqueadosSuspendidos = new Cola<PCB>();
+
+        /* Semáforo binario (1 permiso) usado como mutex */
+        this.mutexMemoria = new Semaphore(1);
     }
 
-    /* ====== Altas y movimientos básicos ====== */
+    /* Altas básicas y movimientos entre colas principales
+    */
 
     /**
-     * Admite un proceso al sistema y lo coloca en LISTO.
+     * Inserta un proceso al sistema operativo marcándolo como LISTO.
+     * Si estaba en alguna otra cola, se elimina de ahí primero.
+     *
+     * @param p Proceso a admitir.
      */
     public void admitir(PCB p) {
         if (p == null) {
             return;
         }
-        removerDeCualquierCola(p);
-        p.setEstado(Estado.LISTO);
-        listos.encolar(p);
+        try {
+            mutexMemoria.acquire();
+
+            removerDeCualquierColaSinLock(p);
+            p.setEstado(Estado.LISTO);
+            listos.encolar(p);
+
+        } catch (InterruptedException e) {
+            // En simulación simple no hacemos nada especial
+        } finally {
+            mutexMemoria.release();
+        }
     }
 
     /**
-     * Pasa un proceso a LISTO.
+     * Mueve un proceso a la cola de LISTO (estado LISTO).
+     *
+     * @param p Proceso que vuelve a Listo.
      */
     public void moverAListos(PCB p) {
         if (p == null) {
             return;
         }
-        removerDeCualquierCola(p);
-        p.setEstado(Estado.LISTO);
-        listos.encolar(p);
+        try {
+            mutexMemoria.acquire();
+
+            removerDeCualquierColaSinLock(p);
+            p.setEstado(Estado.LISTO);
+            listos.encolar(p);
+
+        } catch (InterruptedException e) {
+        } finally {
+            mutexMemoria.release();
+        }
     }
 
     /**
-     * Bloquea un proceso por I/O por la cantidad de ciclos indicada.
+     * Mueve un proceso a la cola de BLOQUEADO.
+     * Además configura el contador interno de bloqueo de E/S.
+     *
+     * @param p Proceso que pasa a bloqueo.
+     * @param ciclosBloqueo Cantidad de ciclos que debe estar bloqueado.
      */
     public void moverABloqueados(PCB p, int ciclosBloqueo) {
         if (p == null) {
             return;
         }
-        removerDeCualquierCola(p);
-        p.prepararBloqueo(ciclosBloqueo);
-        bloqueados.encolar(p);
+        try {
+            mutexMemoria.acquire();
+
+            removerDeCualquierColaSinLock(p);
+            p.prepararBloqueo(ciclosBloqueo);
+            bloqueados.encolar(p);
+
+        } catch (InterruptedException e) {
+        } finally {
+            mutexMemoria.release();
+        }
     }
 
     /**
-     * Mueve el proceso a TERMINADOS.
+     * Marca un proceso como TERMINADO y lo coloca en la cola de terminados.
+     *
+     * @param p Proceso que ya terminó su ejecución.
      */
     public void moverATerminados(PCB p) {
         if (p == null) {
             return;
         }
-        removerDeCualquierCola(p);
-        p.setEstado(Estado.TERMINADO);
-        terminados.encolar(p);
+        try {
+            mutexMemoria.acquire();
+
+            removerDeCualquierColaSinLock(p);
+            p.setEstado(Estado.TERMINADO);
+            terminados.encolar(p);
+
+        } catch (InterruptedException e) {
+        } finally {
+            mutexMemoria.release();
+        }
     }
 
     /**
-     * Saca el próximo LISTO para ejecutar (FCFS).
+     * Obtiene y retira el siguiente proceso LISTO para ejecución (tipo FCFS).
+     * 
+     * @return PCB listo o null si la cola está vacía.
      */
     public PCB sacarDeListos() {
-        return listos.desencolar();
+        try {
+            mutexMemoria.acquire();
+            return listos.desencolar();
+        } catch (InterruptedException e) {
+            return null;
+        } finally {
+            mutexMemoria.release();
+        }
     }
-
-    public boolean hayListos() {
-        return !listos.esVacia();
-    }
-
-    /* ====== Suspensión (swap-out/in) ====== */
 
     /**
-     * Suspende el primer proceso en LISTO (LISTO -> LISTO_SUSPENDIDO).
-     * Devuelve el proceso suspendido o null si no había.
+     * Indica si hay al menos un proceso listo para ejecutar.
+     * 
+     * @return true si la cola de listos no está vacía.
+     */
+    public boolean hayListos() {
+        try {
+            mutexMemoria.acquire();
+            return !listos.esVacia();
+        } catch (InterruptedException e) {
+            return false;
+        } finally {
+            mutexMemoria.release();
+        }
+    }
+
+    /*
+       Suspensión y reactivación (swap out / swap in)
+    */
+
+    /**
+     * Suspende el primer proceso en LISTO.
+     * Pasa de LISTO -> LISTO_SUSPENDIDO.
+     * 
+     * @return Proceso suspendido o null si no había.
      */
     public PCB suspenderPrimeroListo() {
-        PCB p = listos.desencolar();
-        if (p == null) {
+        try {
+            mutexMemoria.acquire();
+
+            PCB p = listos.desencolar();
+            if (p == null) {
+                return null;
+            }
+            p.setEstado(Estado.LISTO_SUSPENDIDO);
+            listosSuspendidos.encolar(p);
+            return p;
+
+        } catch (InterruptedException e) {
             return null;
+        } finally {
+            mutexMemoria.release();
         }
-        p.setEstado(Estado.LISTO_SUSPENDIDO);
-        listosSuspendidos.encolar(p);
-        return p;
     }
 
     /**
-     * Suspende el primer proceso en BLOQUEADO (BLOQUEADO -> BLOQUEADO_SUSPENDIDO).
-     * Devuelve el proceso suspendido o null si no había.
+     * Suspende el primer proceso en BLOQUEADO.
+     * Pasa de BLOQUEADO -> BLOQUEADO_SUSPENDIDO.
+     * 
+     * @return Proceso suspendido o null si no había.
      */
     public PCB suspenderPrimeroBloqueado() {
-        PCB p = bloqueados.desencolar();
-        if (p == null) {
+        try {
+            mutexMemoria.acquire();
+
+            PCB p = bloqueados.desencolar();
+            if (p == null) {
+                return null;
+            }
+            p.setEstado(Estado.BLOQUEADO_SUSPENDIDO);
+            bloqueadosSuspendidos.encolar(p);
+            return p;
+
+        } catch (InterruptedException e) {
             return null;
+        } finally {
+            mutexMemoria.release();
         }
-        p.setEstado(Estado.BLOQUEADO_SUSPENDIDO);
-        bloqueadosSuspendidos.encolar(p);
-        return p;
     }
 
     /**
-     * Reactiva (swap-in) uno de LISTO_SUSPENDIDO -> LISTO.
+     * Suspende un proceso específico según su estado actual.
+     * LISTO -> LISTO_SUSPENDIDO
+     * BLOQUEADO -> BLOQUEADO_SUSPENDIDO
+     * 
+     * Si el proceso está ejecutando en CPU, el Kernel debe evitar llamarla.
+     *
+     * @param p Proceso a suspender.
+     */
+    public void suspender(PCB p) {
+        if (p == null) {
+            return;
+        }
+        try {
+            mutexMemoria.acquire();
+
+            /* Lo saco de donde esté actualmente */
+            removerDeCualquierColaSinLock(p);
+
+            /* Según su estado actual, lo paso a la cola suspendida apropiada */
+            if (p.getEstado() == Estado.LISTO) {
+                p.setEstado(Estado.LISTO_SUSPENDIDO);
+                listosSuspendidos.encolar(p);
+            } else if (p.getEstado() == Estado.BLOQUEADO) {
+                p.setEstado(Estado.BLOQUEADO_SUSPENDIDO);
+                bloqueadosSuspendidos.encolar(p);
+            } else {
+                /* No hacemos nada si no aplica suspensión en ese estado */
+            }
+
+        } catch (InterruptedException e) {
+        } finally {
+            mutexMemoria.release();
+        }
+    }
+
+    /**
+     * Reactiva un proceso previamente suspendido en estado LISTO_SUSPENDIDO.
+     * Pasa LISTO_SUSPENDIDO -> LISTO.
+     *
+     * @return Proceso reactivado o null si no había.
      */
     public PCB reactivarListoSuspendido() {
-        PCB p = listosSuspendidos.desencolar();
-        if (p == null) {
+        try {
+            mutexMemoria.acquire();
+
+            PCB p = listosSuspendidos.desencolar();
+            if (p == null) {
+                return null;
+            }
+            p.setEstado(Estado.LISTO);
+            listos.encolar(p);
+            return p;
+
+        } catch (InterruptedException e) {
             return null;
+        } finally {
+            mutexMemoria.release();
         }
-        p.setEstado(Estado.LISTO);
-        listos.encolar(p);
-        return p;
     }
 
     /**
-     * Reactiva (swap-in) uno de BLOQUEADO_SUSPENDIDO -> BLOQUEADO.
+     * Reactiva un proceso previamente suspendido en BLOQUEADO_SUSPENDIDO.
+     * Pasa BLOQUEADO_SUSPENDIDO -> BLOQUEADO.
+     *
+     * @return Proceso reactivado o null si no había.
      */
     public PCB reactivarBloqueadoSuspendido() {
-        PCB p = bloqueadosSuspendidos.desencolar();
-        if (p == null) {
+        try {
+            mutexMemoria.acquire();
+
+            PCB p = bloqueadosSuspendidos.desencolar();
+            if (p == null) {
+                return null;
+            }
+            p.setEstado(Estado.BLOQUEADO);
+            bloqueados.encolar(p);
+            return p;
+
+        } catch (InterruptedException e) {
             return null;
+        } finally {
+            mutexMemoria.release();
         }
-        p.setEstado(Estado.BLOQUEADO);
-        bloqueados.encolar(p);
-        return p;
     }
 
-    /* ====== Ticks: avance de bloqueos y espera ====== */
+    /* Avance de tiempo: bloqueo de E/S y espera
+    */
 
     /**
-     * Avanza un ciclo de reloj para procesos BLOQUEADOS:
-     * - decrementa su bloqueo
-     * - si termina el bloqueo, pasa a LISTO
+     * Avanza un ciclo de reloj para los procesos BLOQUEADOS.
+     * Disminuye su contador de bloqueo.
+     * Si un proceso ya terminó su espera de E/S, vuelve a LISTO.
      */
     public void tickBloqueados() {
-        int n = bloqueados.verTamano();
-        int i = 0;
-        while (i < n) {
-            PCB p = bloqueados.getAt(i);
-            if (p != null) {
-                p.tickBloqueo();
-                if (p.terminoBloqueo()) {
-                    bloqueados.removeAt(i);
-                    p.setEstado(Estado.LISTO);
-                    listos.encolar(p);
-                    n = n - 1;
-                    continue;
+        try {
+            mutexMemoria.acquire();
+
+            int n = bloqueados.verTamano();
+            int i = 0;
+            while (i < n) {
+                PCB p = bloqueados.getAt(i);
+                if (p != null) {
+                    p.tickBloqueo();
+                    if (p.terminoBloqueo()) {
+                        /* Saca de bloqueados y lo pasa a listo */
+                        bloqueados.removeAt(i);
+                        p.setEstado(Estado.LISTO);
+                        listos.encolar(p);
+
+                        n = n - 1;   // porque la cola ahora es más chica
+                        continue;    // no incrementes i, revisa misma posición otra vez
+                    }
                 }
+                i = i + 1;
             }
-            i = i + 1;
+
+        } catch (InterruptedException e) {
+        } finally {
+            mutexMemoria.release();
         }
     }
 
     /**
-     * Avanza un ciclo para BLOQUEADO_SUSPENDIDO:
-     * - decrementa su bloqueo
-     * - si termina, pasa a LISTO_SUSPENDIDO (sigue fuera de memoria)
+     * Avanza un ciclo de reloj para los procesos BLOQUEADO_SUSPENDIDO.
+     * Si terminan su E/S, pasan a LISTO_SUSPENDIDO.
      */
     public void tickBloqueadosSuspendidos() {
-        int n = bloqueadosSuspendidos.verTamano();
-        int i = 0;
-        while (i < n) {
-            PCB p = bloqueadosSuspendidos.getAt(i);
-            if (p != null) {
-                p.tickBloqueo();
-                if (p.terminoBloqueo()) {
-                    bloqueadosSuspendidos.removeAt(i);
-                    p.setEstado(Estado.LISTO_SUSPENDIDO);
-                    listosSuspendidos.encolar(p);
-                    n = n - 1;
-                    continue;
+        try {
+            mutexMemoria.acquire();
+
+            int n = bloqueadosSuspendidos.verTamano();
+            int i = 0;
+            while (i < n) {
+                PCB p = bloqueadosSuspendidos.getAt(i);
+                if (p != null) {
+                    p.tickBloqueo();
+                    if (p.terminoBloqueo()) {
+                        bloqueadosSuspendidos.removeAt(i);
+                        p.setEstado(Estado.LISTO_SUSPENDIDO);
+                        listosSuspendidos.encolar(p);
+
+                        n = n - 1;
+                        continue;
+                    }
                 }
+                i = i + 1;
             }
-            i = i + 1;
+
+        } catch (InterruptedException e) {
+        } finally {
+            mutexMemoria.release();
         }
     }
 
     /**
-     * Incrementa el tiempo de espera de todos los procesos en LISTO.
+     * Suma 1 ciclo de espera a todos los procesos que están en LISTO.
+     * Esto se usa en métricas como HRRN.
      */
     public void incrementarEsperaListos() {
-        int n = listos.verTamano();
-        int i = 0;
-        while (i < n) {
-            PCB p = listos.getAt(i);
-            if (p != null) {
-                p.incrementarEspera();
+        try {
+            mutexMemoria.acquire();
+
+            int n = listos.verTamano();
+            int i = 0;
+            while (i < n) {
+                PCB p = listos.getAt(i);
+                if (p != null) {
+                    p.incrementarEspera();
+                }
+                i = i + 1;
             }
-            i = i + 1;
+
+        } catch (InterruptedException e) {
+        } finally {
+            mutexMemoria.release();
         }
     }
 
-    /* ====== Mini-API para planificadores (SJF/SRT/HRRN) ====== */
+    /* Mini-API de ayuda para el planificador (mirar listos, sacar por índice...)
+       */
 
     /**
-     * Devuelve el i-ésimo proceso en la cola de listos (o null si está fuera de rango).
+     * Devuelve el proceso que está en la posición i de la cola LISTO
+     * sin removerlo.
+     *
+     * @param i índice dentro de la cola de listos.
+     * @return PCB en esa posición o null si está fuera de rango.
      */
     public PCB verListoEn(int i) {
-        return listos.getAt(i);
+        try {
+            mutexMemoria.acquire();
+            return listos.getAt(i);
+        } catch (InterruptedException e) {
+            return null;
+        } finally {
+            mutexMemoria.release();
+        }
     }
 
     /**
-     * Quita y devuelve el i-ésimo proceso de la cola de listos (o null si está fuera de rango).
+     * Quita y devuelve el proceso que está en la posición i de la cola LISTO.
+     *
+     * @param i índice del proceso a quitar.
+     * @return PCB removido o null si el índice no existe.
      */
     public PCB quitarListoEn(int i) {
-        return listos.removeAt(i);
+        try {
+            mutexMemoria.acquire();
+            return listos.removeAt(i);
+        } catch (InterruptedException e) {
+            return null;
+        } finally {
+            mutexMemoria.release();
+        }
     }
 
     /**
-     * Cantidad de procesos en listos (atajo para planificadores).
+     * Cantidad de procesos listos actualmente.
+     *
+     * @return número de elementos en la cola de listos.
      */
     public int cantidadListos() {
-        return listos.verTamano();
+        try {
+            mutexMemoria.acquire();
+            return listos.verTamano();
+        } catch (InterruptedException e) {
+            return 0;
+        } finally {
+            mutexMemoria.release();
+        }
     }
 
-    /* ====== Getters para UI / métricas ====== */
+    /* Getters útiles para interfaz / métricas en vivo
+    */
 
+    /**
+     * @return tamaño de la cola LISTO.
+     */
     public int tamanoListos() {
-        return listos.verTamano();
+        try {
+            mutexMemoria.acquire();
+            return listos.verTamano();
+        } catch (InterruptedException e) {
+            return 0;
+        } finally {
+            mutexMemoria.release();
+        }
     }
 
+    /**
+     * @return tamaño de la cola BLOQUEADO.
+     */
     public int tamanoBloqueados() {
-        return bloqueados.verTamano();
+        try {
+            mutexMemoria.acquire();
+            return bloqueados.verTamano();
+        } catch (InterruptedException e) {
+            return 0;
+        } finally {
+            mutexMemoria.release();
+        }
     }
 
+    /**
+     * @return tamaño de la cola TERMINADO.
+     */
     public int tamanoTerminados() {
-        return terminados.verTamano();
+        try {
+            mutexMemoria.acquire();
+            return terminados.verTamano();
+        } catch (InterruptedException e) {
+            return 0;
+        } finally {
+            mutexMemoria.release();
+        }
     }
 
+    /**
+     * @return tamaño de la cola LISTO_SUSPENDIDO.
+     */
     public int tamanoListosSuspendidos() {
-        return listosSuspendidos.verTamano();
+        try {
+            mutexMemoria.acquire();
+            return listosSuspendidos.verTamano();
+        } catch (InterruptedException e) {
+            return 0;
+        } finally {
+            mutexMemoria.release();
+        }
     }
 
+    /**
+     * @return tamaño de la cola BLOQUEADO_SUSPENDIDO.
+     */
     public int tamanoBloqueadosSuspendidos() {
-        return bloqueadosSuspendidos.verTamano();
+        try {
+            mutexMemoria.acquire();
+            return bloqueadosSuspendidos.verTamano();
+        } catch (InterruptedException e) {
+            return 0;
+        } finally {
+            mutexMemoria.release();
+        }
     }
 
+    /**
+     * @return representación en texto de la cola de listos.
+     */
     public String verColaListos() {
-        return listos.mostrarCola();
+        try {
+            mutexMemoria.acquire();
+            return listos.mostrarCola();
+        } catch (InterruptedException e) {
+            return "";
+        } finally {
+            mutexMemoria.release();
+        }
     }
 
+    /**
+     * @return representación en texto de la cola de bloqueados.
+     */
     public String verColaBloqueados() {
-        return bloqueados.mostrarCola();
+        try {
+            mutexMemoria.acquire();
+            return bloqueados.mostrarCola();
+        } catch (InterruptedException e) {
+            return "";
+        } finally {
+            mutexMemoria.release();
+        }
     }
 
+    /**
+     * @return representación en texto de la cola de terminados.
+     */
     public String verColaTerminados() {
-        return terminados.mostrarCola();
+        try {
+            mutexMemoria.acquire();
+            return terminados.mostrarCola();
+        } catch (InterruptedException e) {
+            return "";
+        } finally {
+            mutexMemoria.release();
+        }
     }
 
+    /**
+     * @return representación en texto de la cola de listos suspendidos.
+     */
     public String verColaListosSuspendidos() {
-        return listosSuspendidos.mostrarCola();
+        try {
+            mutexMemoria.acquire();
+            return listosSuspendidos.mostrarCola();
+        } catch (InterruptedException e) {
+            return "";
+        } finally {
+            mutexMemoria.release();
+        }
     }
 
+    /**
+     * @return representación en texto de la cola de bloqueados suspendidos.
+     */
     public String verColaBloqueadosSuspendidos() {
-        return bloqueadosSuspendidos.mostrarCola();
+        try {
+            mutexMemoria.acquire();
+            return bloqueadosSuspendidos.mostrarCola();
+        } catch (InterruptedException e) {
+            return "";
+        } finally {
+            mutexMemoria.release();
+        }
     }
 
-    /* ====== Helper interno: evitar duplicados al mover ====== */
-
-    private boolean removerDeCualquierCola(PCB p) {
+    /*
+    * Método de uso interno.
+    * Quita el proceso de cualquier cola en la que pueda estar.
+    * IMPORTANTE: este método asume que ya se tomó el mutex antes de llamarlo.
+    */
+    private boolean removerDeCualquierColaSinLock(PCB p) {
         boolean removido = false;
-        int n;
-        int i;
 
-        n = listos.verTamano();
-        i = 0;
+        /* Intentar quitarlo de LISTO */
+        int n = listos.verTamano();
+        int i = 0;
         while (i < n) {
             if (listos.getAt(i) == p) {
                 listos.removeAt(i);
@@ -291,6 +613,7 @@ public class MemoriaPrincipal {
             i = i + 1;
         }
 
+        /* Intentar quitarlo de BLOQUEADO */
         n = bloqueados.verTamano();
         i = 0;
         while (i < n) {
@@ -303,6 +626,7 @@ public class MemoriaPrincipal {
             i = i + 1;
         }
 
+        /* Intentar quitarlo de TERMINADO */
         n = terminados.verTamano();
         i = 0;
         while (i < n) {
@@ -315,6 +639,7 @@ public class MemoriaPrincipal {
             i = i + 1;
         }
 
+        /* Intentar quitarlo de LISTO_SUSPENDIDO */
         n = listosSuspendidos.verTamano();
         i = 0;
         while (i < n) {
@@ -327,6 +652,7 @@ public class MemoriaPrincipal {
             i = i + 1;
         }
 
+        /* Intentar quitarlo de BLOQUEADO_SUSPENDIDO */
         n = bloqueadosSuspendidos.verTamano();
         i = 0;
         while (i < n) {
