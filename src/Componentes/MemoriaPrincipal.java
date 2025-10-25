@@ -34,6 +34,7 @@ public class MemoriaPrincipal {
         if (p == null) {
             return;
         }
+        removerDeCualquierCola(p);
         p.setEstado(Estado.LISTO);
         listos.encolar(p);
     }
@@ -45,6 +46,7 @@ public class MemoriaPrincipal {
         if (p == null) {
             return;
         }
+        removerDeCualquierCola(p);
         p.setEstado(Estado.LISTO);
         listos.encolar(p);
     }
@@ -56,6 +58,7 @@ public class MemoriaPrincipal {
         if (p == null) {
             return;
         }
+        removerDeCualquierCola(p);
         p.prepararBloqueo(ciclosBloqueo);
         bloqueados.encolar(p);
     }
@@ -67,6 +70,7 @@ public class MemoriaPrincipal {
         if (p == null) {
             return;
         }
+        removerDeCualquierCola(p);
         p.setEstado(Estado.TERMINADO);
         terminados.encolar(p);
     }
@@ -203,6 +207,29 @@ public class MemoriaPrincipal {
         }
     }
 
+    /* ====== Mini-API para planificadores (SJF/SRT/HRRN) ====== */
+
+    /**
+     * Devuelve el i-ésimo proceso en la cola de listos (o null si está fuera de rango).
+     */
+    public PCB verListoEn(int i) {
+        return listos.getAt(i);
+    }
+
+    /**
+     * Quita y devuelve el i-ésimo proceso de la cola de listos (o null si está fuera de rango).
+     */
+    public PCB quitarListoEn(int i) {
+        return listos.removeAt(i);
+    }
+
+    /**
+     * Cantidad de procesos en listos (atajo para planificadores).
+     */
+    public int cantidadListos() {
+        return listos.verTamano();
+    }
+
     /* ====== Getters para UI / métricas ====== */
 
     public int tamanoListos() {
@@ -244,5 +271,74 @@ public class MemoriaPrincipal {
     public String verColaBloqueadosSuspendidos() {
         return bloqueadosSuspendidos.mostrarCola();
     }
-    
+
+    /* ====== Helper interno: evitar duplicados al mover ====== */
+
+    private boolean removerDeCualquierCola(PCB p) {
+        boolean removido = false;
+        int n;
+        int i;
+
+        n = listos.verTamano();
+        i = 0;
+        while (i < n) {
+            if (listos.getAt(i) == p) {
+                listos.removeAt(i);
+                removido = true;
+                n = n - 1;
+                continue;
+            }
+            i = i + 1;
+        }
+
+        n = bloqueados.verTamano();
+        i = 0;
+        while (i < n) {
+            if (bloqueados.getAt(i) == p) {
+                bloqueados.removeAt(i);
+                removido = true;
+                n = n - 1;
+                continue;
+            }
+            i = i + 1;
+        }
+
+        n = terminados.verTamano();
+        i = 0;
+        while (i < n) {
+            if (terminados.getAt(i) == p) {
+                terminados.removeAt(i);
+                removido = true;
+                n = n - 1;
+                continue;
+            }
+            i = i + 1;
+        }
+
+        n = listosSuspendidos.verTamano();
+        i = 0;
+        while (i < n) {
+            if (listosSuspendidos.getAt(i) == p) {
+                listosSuspendidos.removeAt(i);
+                removido = true;
+                n = n - 1;
+                continue;
+            }
+            i = i + 1;
+        }
+
+        n = bloqueadosSuspendidos.verTamano();
+        i = 0;
+        while (i < n) {
+            if (bloqueadosSuspendidos.getAt(i) == p) {
+                bloqueadosSuspendidos.removeAt(i);
+                removido = true;
+                n = n - 1;
+                continue;
+            }
+            i = i + 1;
+        }
+
+        return removido;
+    }
 }
