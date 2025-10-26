@@ -4,6 +4,8 @@
  */
 package proyecto.pkg1.so;
 
+import GUI.Interfaz;
+
 /**
  *
  * @author luismarianolovera
@@ -15,6 +17,12 @@ public class Proyecto1SO {
      */
     public static void main(String[] args) {
         // TODO code application logic here
+        java.awt.EventQueue.invokeLater(() -> {
+            Interfaz interfaz = new Interfaz();
+            interfaz.setTitle("Simulador del SO");
+            interfaz.setLocationRelativeTo(null);  
+            interfaz.setVisible(true);             
+        });
     }
     
 }
