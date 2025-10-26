@@ -11,15 +11,23 @@ import Estructuras.Cola;
  * @author luismarianolovera
  */
 public class Kernel extends Thread {
-     private MemoriaPrincipal memoria;
+    private MemoriaPrincipal memoria;
     private Planificador planificador;
     private CPU cpu;
     private int reloj;
     private int duracionCicloMS;
     private int duracionBloqueoIO;
     private volatile boolean corriendo;
+    private volatile boolean vivo; 
     private Cola<String> logEventos;
     private int limiteProcesosEnMemoria;
+    private boolean yaArranqueHilo = false;
+    
+    //Necesario para desarrollo de grafica
+    private static final int HIST_MAX = 1000;
+    private int[] histTiempo = new int[HIST_MAX];
+    private int[] histUsoCPU = new int[HIST_MAX];
+    private int histCount = 0;
 
     public Kernel(
             Planificador.PoliticaPlanificacion politica,
@@ -34,7 +42,8 @@ public class Kernel extends Thread {
         this.reloj = 0;
         this.duracionCicloMS = duracionCicloMS;
         this.duracionBloqueoIO = duracionBloqueoIO;
-        this.corriendo = true;
+        this.corriendo = false;
+        this.vivo = true;   
         this.cpu = new CPU(0, this);
 
         this.logEventos = new Cola<String>();
@@ -43,10 +52,24 @@ public class Kernel extends Thread {
 
     /**
      * Arranca el hilo de la CPU.
-     * (El hilo del Kernel se arranca con this.start() desde main.)
      */
-    public void iniciarCPU() {
-        cpu.start();
+    public void iniciarKernel() {
+        if (!yaArranqueHilo) {
+            yaArranqueHilo = true;
+            corriendo = true;
+            this.start();
+            cpu.start();
+            agregarLog("Kernel iniciado por el usuario");
+        } else {
+            // ya estaba creado antes, solo lo reanudo
+            corriendo = true;
+            agregarLog("Kernel reanudado por el usuario");
+        }
+    }
+    
+    public void pausarKernel() {
+        corriendo = false;
+        agregarLog("Ciclo " + reloj + ": Kernel pausado por el usuario");
     }
 
     /**
@@ -55,33 +78,38 @@ public class Kernel extends Thread {
      */
     @Override
     public void run() {
-        while (corriendo) {
+        while (vivo) {
 
-            // 1. Si la CPU está libre, le damos un proceso listo
-            despacharProcesoACPU();
-
-            // 2. Actualizamos bloqueos de E/S y suspensiones
-            memoria.tickBloqueados();
-            memoria.tickBloqueadosSuspendidos();
-
-            // 3. Sumamos espera a los procesos que están listos
-            planificador.incrementarEspera(memoria);
-
-            // control de suspensión / swap
-            controlarSuspension();
-
-            // 4. Avanzar reloj global
-            reloj = reloj + 1;
-
-            // 5. Dormir un ciclo "de SO"
+        // si está pausado, no avanzar reloj ni nada
+        if (!corriendo) {
             try {
-                Thread.sleep(duracionCicloMS);
-            } catch (InterruptedException e) {
-                // no hacemos nada especial
-            }
+                Thread.sleep(50);
+            } catch (InterruptedException e) {}
+            continue;
         }
 
-        // Cuando salimos del while, apagamos la CPU
+        memoria.tickBloqueados();
+        memoria.tickBloqueadosSuspendidos();
+
+        reubicarListosEnFeedback();
+        despacharProcesoACPU();
+        planificador.incrementarEspera(memoria);
+        controlarSuspension();
+
+        int usoActualCPU = (cpu.getProcesoActual() != null) ? 100 : 0;
+
+        if (histCount < HIST_MAX) {
+            histTiempo[histCount] = reloj;
+            histUsoCPU[histCount] = usoActualCPU;
+            histCount = histCount + 1;
+        }
+
+        reloj = reloj + 1;
+
+        try {
+            Thread.sleep(duracionCicloMS);
+        } catch (InterruptedException e) {}
+        }
         apagarCPU();
     }
 
@@ -140,7 +168,7 @@ public class Kernel extends Thread {
      */
     public void detenerKernel() {
         corriendo = false;
-        agregarLog("Ciclo " + reloj + ": Kernel detenido por el usuario");
+        agregarLog("Ciclo " + reloj + ": Kernel pausado por el usuario");
     }
 
     /**
@@ -186,6 +214,8 @@ public class Kernel extends Thread {
         if (p == null) {
             return;
         }
+        
+        p.setTiempoFin(reloj);
         p.setEstado(Estado.TERMINADO);
         memoria.moverATerminados(p);
         agregarLog("Ciclo " + reloj + ": Proceso "
@@ -203,11 +233,10 @@ public class Kernel extends Thread {
         if (p == null) {
             return;
         }
-        memoria.moverABloqueados(p, duracionBloqueoIO);
-        agregarLog("Ciclo " + reloj + ": Proceso "
-                + p.getNombre() + " (PID " + p.getId()
-                + ") BLOQUEADO (E/S)");
+        memoria.moverABloqueados(p, p.getIoDuracionBloqueo());
+        agregarLog("Ciclo " + reloj + ": Proceso " + p.getNombre() + " (PID " + p.getId() + ") BLOQUEADO (E/S)");
     }
+ 
 
     /**
      * La CPU avisa que agotó quantum (Round Robin / Feedback).
@@ -250,6 +279,23 @@ public class Kernel extends Thread {
      */
     public boolean debeExpropiarSRT(PCB p) {
         return planificador.debeExpropiarSRT(p, memoria);
+    }
+    
+    private void reubicarListosEnFeedback() {
+        if (!planificador.esFeedback()) {
+            return;
+        }
+
+        while (memoria.hayListos()) {
+            PCB p = memoria.sacarDeListos();
+            if (p == null) {
+                break;
+            }
+
+            planificador.alDesbloquear(p, memoria);
+
+            agregarLog("Ciclo " + reloj + ": Proceso " + p.getNombre() + " (PID " + p.getId() + ") reubicado en Feedback (Q" + p.getPrioridad() + ") tras E/S");
+        }
     }
 
     /**
@@ -308,5 +354,17 @@ public class Kernel extends Thread {
      */
     private void agregarLog(String linea) {
         logEventos.encolar(linea);
+    }
+    
+    public int[] getHistTiempo() {
+        return histTiempo;
+    }
+
+    public int[] getHistUsoCPU() {
+        return histUsoCPU;
+    }
+
+    public int getHistCount() {
+        return histCount;
     }
 }

@@ -9,7 +9,7 @@ package Componentes;
  * @author luismarianolovera
  */
 public class CPU extends Thread {
-        private int idCPU;
+    private int idCPU;
     private Kernel kernel;
     private PCB procesoActual;
     private volatile boolean encendida;
@@ -42,13 +42,15 @@ public class CPU extends Thread {
     }
 
     private void ejecutarPaso(PCB p) {
-
         p.setEstado(Estado.EJECUCION);
-
         p.avanzarPC();
         p.decrementarRafaga();
+        p.avanzarMAR(); 
         p.incrementarServicio();
-        p.consumirQuantum();
+
+        if (kernel.getPlanificador().usaQuantum()) {
+            p.consumirQuantum();
+        }
 
         if (p.getRafagaRestante() <= 0) {
             liberarYNotificarTerminado(p);
@@ -65,7 +67,8 @@ public class CPU extends Thread {
             return;
         }
 
-        if (p.sinQuantum()) {
+    
+        if (kernel.getPlanificador().usaQuantum() && p.sinQuantum()) {
             liberarYNotificarQuantum(p);
             return;
         }

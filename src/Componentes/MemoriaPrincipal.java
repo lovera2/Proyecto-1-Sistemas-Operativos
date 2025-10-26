@@ -667,4 +667,119 @@ public class MemoriaPrincipal {
 
         return removido;
     }
+    
+        /**
+     * Construye una matriz de objetos con la info básica de una cola dada,
+     * para poder mostrarla en la JTable de la interfaz.
+     * Formato columnas:
+     *  [0] ID
+     *  [1] Nombre
+     *  [2] Estado
+     *  [3] PC
+     *  [4] MAR
+     *  [5] Quantum restante
+     */
+    private Object[][] construirMatrizDesdeCola(Cola<PCB> cola) {
+        int n = cola.verTamano();
+        Object[][] data = new Object[n][6];
+
+        int i = 0;
+        while (i < n) {
+            PCB p = cola.getAt(i);
+            if (p != null) {
+                data[i][0] = p.getId();
+                data[i][1] = p.getNombre();
+                data[i][2] = p.getEstado();
+                data[i][3] = p.getPc();
+                data[i][4] = p.getMAR();
+                data[i][5] = p.getQuantumRestante();
+            } else {
+                // por seguridad si algo vino null
+                data[i][0] = "-";
+                data[i][1] = "-";
+                data[i][2] = "-";
+                data[i][3] = "-";
+                data[i][4] = "-";
+                data[i][5] = "-";
+            }
+            i = i + 1;
+        }
+        return data;
+    }
+
+    /**
+     * Devuelve el contenido ACTUAL de la cola de LISTOS como matriz para JTable.
+     * Se toma el mutex para no leer a medias.
+     */
+    public Object[][] obtenerTablaListos() {
+        try {
+            mutexMemoria.acquire();
+            return construirMatrizDesdeCola(listos);
+        } catch (InterruptedException e) {
+            return new Object[0][0];
+        } finally {
+            mutexMemoria.release();
+        }
+    }
+
+    /**
+     * Devuelve el contenido ACTUAL de la cola de BLOQUEADOS.
+     */
+    public Object[][] obtenerTablaBloqueados() {
+        try {
+            mutexMemoria.acquire();
+            return construirMatrizDesdeCola(bloqueados);
+        } catch (InterruptedException e) {
+            return new Object[0][0];
+        } finally {
+            mutexMemoria.release();
+        }
+    }
+
+    /**
+     * Devuelve el contenido ACTUAL de la cola de LISTOS_SUSPENDIDOS.
+     */
+    public Object[][] obtenerTablaListosSuspendidos() {
+        try {
+            mutexMemoria.acquire();
+            return construirMatrizDesdeCola(listosSuspendidos);
+        } catch (InterruptedException e) {
+            return new Object[0][0];
+        } finally {
+            mutexMemoria.release();
+        }
+    }
+
+    /**
+     * Devuelve el contenido ACTUAL de la cola de BLOQUEADOS_SUSPENDIDOS.
+     */
+    public Object[][] obtenerTablaBloqueadosSuspendidos() {
+        try {
+            mutexMemoria.acquire();
+            return construirMatrizDesdeCola(bloqueadosSuspendidos);
+        } catch (InterruptedException e) {
+            return new Object[0][0];
+        } finally {
+            mutexMemoria.release();
+        }
+    }
+
+    /**
+     * Devuelve el contenido ACTUAL de la cola de TERMINADOS.
+     */
+    public Object[][] obtenerTablaTerminados() {
+        try {
+            mutexMemoria.acquire();
+            return construirMatrizDesdeCola(terminados);
+        } catch (InterruptedException e) {
+            return new Object[0][0];
+        } finally {
+            mutexMemoria.release();
+        }
+    }
+    
+    public Cola<PCB> getTerminadosCola() {
+        return terminados;
+    }
+    
 }

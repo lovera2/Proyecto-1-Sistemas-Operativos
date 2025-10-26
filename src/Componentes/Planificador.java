@@ -266,6 +266,11 @@ public class Planificador {
         }
         memoria.moverAListos(p);
     }
+    
+    public boolean usaQuantum() {
+    return politica == PoliticaPlanificacion.RR
+        || politica == PoliticaPlanificacion.FEEDBACK;
+}
 
     // Evento: termina I/O (desbloqueo)
 
@@ -461,4 +466,56 @@ public class Planificador {
             }
         }
     }
+    
+    private Object[][] construirMatrizDesdeCola(Cola<PCB> cola) {
+        int n = cola.verTamano();
+        Object[][] data = new Object[n][6];
+        for (int i = 0; i < n; i++) {
+            PCB p = cola.getAt(i);
+            if (p != null) {
+                data[i][0] = p.getId();
+                data[i][1] = p.getNombre();
+                data[i][2] = p.getEstado();
+                data[i][3] = p.getPc();
+                data[i][4] = p.getMAR();
+                data[i][5] = p.getQuantumRestante();
+            } else {
+                data[i] = new Object[]{"-","-","-","-","-","-"};
+            }
+        }
+        return data;
+    }
+    
+    public Object[][] obtenerTablaListosFeedback() {
+        if (politica != PoliticaPlanificacion.FEEDBACK) {
+            return new Object[0][0];
+        }
+    
+        // concatenar q1, q2, q3
+        int n1 = q1.verTamano();
+        int n2 = q2.verTamano();
+        int n3 = q3.verTamano();
+        Object[][] data = new Object[n1 + n2 + n3][6];
+
+        // copiar q1
+        Object[][] d1 = construirMatrizDesdeCola(q1);
+        for (int i = 0; i < n1; i++) {
+            data[i] = d1[i];
+        }
+
+        // copiar q2
+        Object[][] d2 = construirMatrizDesdeCola(q2);
+        for (int j = 0; j < n2; j++) {
+            data[n1 + j] = d2[j];
+        }
+
+        // copiar q3
+        Object[][] d3 = construirMatrizDesdeCola(q3);
+        for (int k = 0; k < n3; k++) {
+            data[n1 + n2 + k] = d3[k];
+        }
+
+        return data;
+    }
+    
 }

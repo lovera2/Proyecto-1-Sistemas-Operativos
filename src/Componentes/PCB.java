@@ -13,38 +13,37 @@ public class PCB {
     private String nombre;
     private Estado estado;
     private int pc;
+    private int mar;
     private int rafagaRestante;
-
-    // HRRN: guarda la ráfaga original
     private Integer rafagaInicial;
-
     private int tiempoLlegada;
     private int tiempoEspera;
     private int tiempoServicio;
     private Integer primeraVezCPU;
-
     private int ioCadaN;
     private int bloqueoRestante;
+    private int ioDuracionBloqueo;
     private int prioridad;
     private int quantumRestante;
+    private Integer tiempoFin;
 
-    public PCB(int id, String nombre, int rafagaInicialValor, int prioridad, int tiempoLlegada, int ioCadaN) {
+    public PCB(int id, String nombre, int rafagaInicialValor, int prioridad, int tiempoLlegada, int ioCadaN, int ioDuracionBloqueo) {
         this.id = id;
         this.nombre = nombre;
         this.rafagaRestante = rafagaInicialValor;
         this.prioridad = prioridad;
         this.tiempoLlegada = tiempoLlegada;
         this.ioCadaN = ioCadaN;
+        this.ioDuracionBloqueo = ioDuracionBloqueo;
 
         this.estado = Estado.NUEVO;
         this.pc = 0;
+        this.mar=0;
         this.tiempoEspera = 0;
         this.tiempoServicio = 0;
         this.primeraVezCPU = null;
         this.bloqueoRestante = 0;
         this.quantumRestante = 0;
-
-        // Opcional: si quieres fijarla desde el inicio
         this.rafagaInicial = rafagaInicialValor;
     }
 
@@ -71,6 +70,10 @@ public class PCB {
     public void avanzarPC() {
         pc = pc + 1;
     }
+    
+    public void avanzarMAR() {
+        mar = mar + 1;
+    }
 
     public int getRafagaRestante() {
         return rafagaRestante;
@@ -82,7 +85,7 @@ public class PCB {
         }
     }
 
-    // ====== HRRN helpers ======
+    //HRRN helpers
     public void setRafagaInicialSiNula() {
         if (rafagaInicial == null) {
             rafagaInicial = rafagaRestante;
@@ -96,7 +99,6 @@ public class PCB {
     public Integer getRafagaInicial() {
         return rafagaInicial;
     }
-    // ==========================
 
     public int getPrioridad() {
         return prioridad;
@@ -186,13 +188,36 @@ public class PCB {
         return quantumRestante == 0;
     }
 
-    // MAR ilustrativo (opcional, útil para GUI)
     public int getMAR() {
-        return id + pc;
+        return mar;
     }
 
     @Override
     public String toString() {
-        return "PCB{id=" + id + ", nombre=" + nombre + ", estado=" + estado + ", pc=" + pc + "}";
+        return "PCB{id=" + id + ", nombre=" + nombre + ", estado=" + estado + ", pc=" + pc + ", mar=" + mar + "}";
+    }
+    
+    public void setTiempoFin(int t) {
+        this.tiempoFin = t;
+    }
+
+    public Integer getTiempoFin() {
+        return tiempoFin;
+    }
+
+    // turnaround = fin - llegada
+    public Integer getTurnaround() {
+        if (tiempoFin == null) {
+            return null;
+        }
+        return tiempoFin - tiempoLlegada;
+    }
+    
+    public int getQuantumRestante() {
+        return quantumRestante;
+    }
+    
+    public int getIoDuracionBloqueo() {
+        return ioDuracionBloqueo;
     }
 }
