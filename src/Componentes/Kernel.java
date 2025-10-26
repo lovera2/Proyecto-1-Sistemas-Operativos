@@ -28,6 +28,12 @@ public class Kernel extends Thread {
     private int[] histTiempo = new int[HIST_MAX];
     private int[] histUsoCPU = new int[HIST_MAX];
     private int histCount = 0;
+    private int totalTerminados = 0;
+    private int sumaTurnaround = 0;
+    private int sumaEspera = 0;
+
+    private int ciclosTotalesSimulados = 0;
+    private int ciclosTotalesCPUOcupada = 0;
 
     public Kernel(
             Planificador.PoliticaPlanificacion politica,
@@ -102,6 +108,11 @@ public class Kernel extends Thread {
             histTiempo[histCount] = reloj;
             histUsoCPU[histCount] = usoActualCPU;
             histCount = histCount + 1;
+        }
+        
+        ciclosTotalesSimulados = ciclosTotalesSimulados + 1;
+        if (cpu.getProcesoActual() != null) {
+            ciclosTotalesCPUOcupada = ciclosTotalesCPUOcupada + 1;
         }
 
         reloj = reloj + 1;
@@ -218,6 +229,19 @@ public class Kernel extends Thread {
         p.setTiempoFin(reloj);
         p.setEstado(Estado.TERMINADO);
         memoria.moverATerminados(p);
+        
+        totalTerminados = totalTerminados + 1;
+
+        // turnaround = (fin - llegada)
+        int turnaround = reloj - p.getTiempoLlegada();
+        if (turnaround < 0) {
+            turnaround = 0; // seguridad
+        }
+        sumaTurnaround = sumaTurnaround + turnaround;
+
+        // espera total del proceso (asumimos PCB va acumulando tiempoEspera)
+        sumaEspera = sumaEspera + p.getTiempoEspera();
+
         agregarLog("Ciclo " + reloj + ": Proceso "
                 + p.getNombre() + " (PID " + p.getId()
                 + ") TERMINADO");
@@ -298,6 +322,33 @@ public class Kernel extends Thread {
         }
     }
 
+    
+    public String getResumenEstadisticas() {
+        StringBuilder sb = new StringBuilder();
+
+        sb.append("=== Estadísticas del sistema ===\n");
+        sb.append("Ciclo actual: ").append(reloj).append("\n");
+        sb.append("Procesos terminados: ").append(totalTerminados).append("\n");
+
+        if (totalTerminados > 0) {
+            double promTurnaround = (double) sumaTurnaround / (double) totalTerminados;
+            double promEspera = (double) sumaEspera / (double) totalTerminados;
+            sb.append("Turnaround promedio: ").append(promTurnaround).append("\n");
+            sb.append("Espera promedio: ").append(promEspera).append("\n");
+        } else {
+            sb.append("Turnaround promedio: N/A\n");
+            sb.append("Espera promedio: N/A\n");
+        }
+
+        double usoCPU = (ciclosTotalesSimulados == 0)
+                ? 0.0
+                : (100.0 * (double) ciclosTotalesCPUOcupada / (double) ciclosTotalesSimulados);
+
+        sb.append("Uso promedio CPU: ").append(usoCPU).append(" %\n");
+        sb.append("Ciclos simulados totales: ").append(ciclosTotalesSimulados).append("\n");
+
+        return sb.toString();
+    }
     /**
      * Devuelve el número de ciclo actual.
      */

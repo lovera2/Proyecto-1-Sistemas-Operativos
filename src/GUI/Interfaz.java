@@ -633,7 +633,8 @@ public class Interfaz extends javax.swing.JFrame {
         btnGrafTurnaround = new javax.swing.JButton();
         btnGrafUsoCPU = new javax.swing.JButton();
         jLabel27 = new javax.swing.JLabel();
-        panelEstadisticas = new javax.swing.JPanel();
+        btnGrafUsoCPU1 = new javax.swing.JButton();
+        jLabel28 = new javax.swing.JLabel();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
 
@@ -1323,16 +1324,30 @@ public class Interfaz extends javax.swing.JFrame {
         jLabel27.setFont(new java.awt.Font("Helvetica Neue", 1, 18)); // NOI18N
         jLabel27.setText("Gráficas");
 
+        btnGrafUsoCPU1.setFont(new java.awt.Font("Helvetica Neue", 0, 14)); // NOI18N
+        btnGrafUsoCPU1.setText("Ver datos");
+        btnGrafUsoCPU1.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                btnGrafUsoCPU1ActionPerformed(evt);
+            }
+        });
+
+        jLabel28.setFont(new java.awt.Font("Helvetica Neue", 1, 18)); // NOI18N
+        jLabel28.setText("Métricas");
+
         javax.swing.GroupLayout panelGraficosLayout = new javax.swing.GroupLayout(panelGraficos);
         panelGraficos.setLayout(panelGraficosLayout);
         panelGraficosLayout.setHorizontalGroup(
             panelGraficosLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(panelGraficosLayout.createSequentialGroup()
                 .addGap(49, 49, 49)
-                .addGroup(panelGraficosLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                    .addComponent(jLabel27)
-                    .addComponent(btnGrafTurnaround, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(btnGrafUsoCPU, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addGroup(panelGraficosLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addComponent(btnGrafUsoCPU1, javax.swing.GroupLayout.PREFERRED_SIZE, 408, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(jLabel28)
+                    .addGroup(panelGraficosLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                        .addComponent(jLabel27)
+                        .addComponent(btnGrafTurnaround, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .addComponent(btnGrafUsoCPU, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)))
                 .addContainerGap(845, Short.MAX_VALUE))
         );
         panelGraficosLayout.setVerticalGroup(
@@ -1344,23 +1359,14 @@ public class Interfaz extends javax.swing.JFrame {
                 .addComponent(btnGrafTurnaround, javax.swing.GroupLayout.PREFERRED_SIZE, 61, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addGap(18, 18, 18)
                 .addComponent(btnGrafUsoCPU, javax.swing.GroupLayout.PREFERRED_SIZE, 61, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(561, Short.MAX_VALUE))
+                .addGap(34, 34, 34)
+                .addComponent(jLabel28)
+                .addGap(18, 18, 18)
+                .addComponent(btnGrafUsoCPU1, javax.swing.GroupLayout.PREFERRED_SIZE, 61, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addContainerGap(425, Short.MAX_VALUE))
         );
 
-        pestanas.addTab("Gráficos", panelGraficos);
-
-        javax.swing.GroupLayout panelEstadisticasLayout = new javax.swing.GroupLayout(panelEstadisticas);
-        panelEstadisticas.setLayout(panelEstadisticasLayout);
-        panelEstadisticasLayout.setHorizontalGroup(
-            panelEstadisticasLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 1302, Short.MAX_VALUE)
-        );
-        panelEstadisticasLayout.setVerticalGroup(
-            panelEstadisticasLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 793, Short.MAX_VALUE)
-        );
-
-        pestanas.addTab("Estadísticas", panelEstadisticas);
+        pestanas.addTab("Gráficos y Métricas", panelGraficos);
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
         getContentPane().setLayout(layout);
@@ -1407,6 +1413,27 @@ public class Interfaz extends javax.swing.JFrame {
          guardarPerfilActualEnJSON();
     }//GEN-LAST:event_btnGuardarPerfil1ActionPerformed
 
+    private void btnGrafUsoCPU1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnGrafUsoCPU1ActionPerformed
+        if (kernel == null) {
+            JOptionPane.showMessageDialog(
+            this,
+            "El kernel todavía no está inicializado.",
+            "Estadísticas",
+            JOptionPane.WARNING_MESSAGE
+        );
+        return;
+    }
+
+    String resumen = kernel.getResumenEstadisticas();
+
+    JOptionPane.showMessageDialog(
+        this,
+        resumen,
+        "Estadísticas actuales",
+        JOptionPane.INFORMATION_MESSAGE
+    ); 
+    }//GEN-LAST:event_btnGrafUsoCPU1ActionPerformed
+
     /**
      * @param args the command line arguments
      */
@@ -1445,6 +1472,7 @@ public class Interfaz extends javax.swing.JFrame {
     private javax.swing.JButton btnCrearProceso;
     private javax.swing.JButton btnGrafTurnaround;
     private javax.swing.JButton btnGrafUsoCPU;
+    private javax.swing.JButton btnGrafUsoCPU1;
     private javax.swing.JButton btnGuardarPerfil1;
     private javax.swing.JButton btnIniciar;
     private javax.swing.JButton btnPausar;
@@ -1470,6 +1498,7 @@ public class Interfaz extends javax.swing.JFrame {
     private javax.swing.JLabel jLabel25;
     private javax.swing.JLabel jLabel26;
     private javax.swing.JLabel jLabel27;
+    private javax.swing.JLabel jLabel28;
     private javax.swing.JLabel jLabel3;
     private javax.swing.JLabel jLabel4;
     private javax.swing.JLabel jLabel5;
@@ -1498,7 +1527,6 @@ public class Interfaz extends javax.swing.JFrame {
     private javax.swing.JScrollPane jScrollPane8;
     private javax.swing.JScrollPane jScrollPane9;
     private javax.swing.JPanel panelCPU;
-    private javax.swing.JPanel panelEstadisticas;
     private javax.swing.JPanel panelEstadoGlobal;
     private javax.swing.JPanel panelEstadoGlobal1;
     private javax.swing.JPanel panelGraficos;
