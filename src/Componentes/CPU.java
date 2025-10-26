@@ -126,7 +126,6 @@ public class CPU extends Thread {
         try {
             Thread.sleep(kernel.getDuracionCicloMS());
         } catch (InterruptedException e) {
-            // nada especial
         }
     }
 

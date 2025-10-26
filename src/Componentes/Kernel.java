@@ -321,8 +321,11 @@ public class Kernel extends Thread {
             agregarLog("Ciclo " + reloj + ": Proceso " + p.getNombre() + " (PID " + p.getId() + ") reubicado en Feedback (Q" + p.getPrioridad() + ") tras E/S");
         }
     }
-
     
+    public boolean estaCorriendo() {
+        return this.corriendo;
+    }
+
     public String getResumenEstadisticas() {
         StringBuilder sb = new StringBuilder();
 

@@ -14,6 +14,8 @@ import Componentes.PCB;
 import Componentes.Planificador;
 import Componentes.PerfilSimulacion;
 import Componentes.Estado;
+import javax.swing.filechooser.FileNameExtensionFilter;
+import javax.swing.JFileChooser;
 import javax.swing.Timer;
 import javax.swing.JOptionPane;
 import java.awt.event.ActionEvent;
@@ -34,6 +36,7 @@ public class Interfaz extends javax.swing.JFrame {
     private Timer refrescadorUI; // Timer Swing que refresca la GUI cada cierto intervalo
     private Cola<PCB> bufferPreKernel = new Cola<PCB>();
     private boolean kernelIniciado = false;
+    private JFileChooser selectorDeArchivo;
     
     /**
      * Creates new form Interfaz
@@ -45,6 +48,10 @@ public class Interfaz extends javax.swing.JFrame {
         CPUpc.setVisible(false);
         CPUmar.setVisible(false);
         CPUestado.setVisible(false);
+        
+        this.selectorDeArchivo = new JFileChooser(".");
+        FileNameExtensionFilter filter = new FileNameExtensionFilter("Archivos de Simulación (*.json)", "json");
+        this.selectorDeArchivo.setFileFilter(filter);
 
         // poner valores iniciales en los labels visibles
         jLabelProcesoValor.setText("-");
@@ -483,6 +490,107 @@ public class Interfaz extends javax.swing.JFrame {
         }
     }
     
+  
+    private void cargarPerfilDesdeJSON() {
+
+        if (kernelIniciado && kernel.estaCorriendo()) {
+            JOptionPane.showMessageDialog(this, 
+            "No puedes cargar un perfil mientras la simulación está en curso.\n" +
+                "Pausa o reinicia la aplicación.", 
+                "Error", 
+                JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+  
+        int resultado = selectorDeArchivo.showOpenDialog(this);
+
+    
+        if (resultado == JFileChooser.APPROVE_OPTION) {
+            String rutaDelArchivo = selectorDeArchivo.getSelectedFile().getAbsolutePath();
+            PerfilSimulacion perfil = new PerfilSimulacion(rutaDelArchivo);
+
+        
+            boolean exito = perfil.cargarDesdeJSON();
+
+            if (exito) {
+                gestor = new GestorSistema(
+                    perfil.getDuracionCicloMS(),
+                    perfil.getDuracionBloqueoIO(),
+                    perfil.getQuantumRR(),
+                    perfil.getPoliticaInicial(),
+                    perfil.getRafagaCPUDefault(),
+                    perfil.getIoCadaNDefault(),
+                    perfil.getPrioridadBase()
+                );
+            
+                kernel = gestor.construirKernel();
+
+        
+                bufferPreKernel.vaciar();
+                Cola<PCB> originales = perfil.getProcesosIniciales();
+                int n = originales.verTamano();
+                for (int i = 0; i < n; i++) {
+                    PCB p = originales.getAt(i);
+                    bufferPreKernel.encolar(p);
+                }
+
+                kernelIniciado = false; 
+
+           
+                actualizarGUICamposConfig(perfil);
+
+                JOptionPane.showMessageDialog(this, 
+                    "Perfil cargado exitosamente desde:\n" + rutaDelArchivo, 
+                    "Perfil Cargado", 
+                    JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                JOptionPane.showMessageDialog(this, 
+                    "Error al cargar el archivo JSON.\n" + 
+                    "Revisa el formato del archivo o la consola.", 
+                    "Error de Carga", 
+                    JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
+
+    private void actualizarGUICamposConfig(PerfilSimulacion perfil) {
+        // Panel "Configuración"
+        spDuracionCiclo.setValue(perfil.getDuracionCicloMS());
+        setPoliticaEnCombo(perfil.getPoliticaInicial()); // Usamos un helper
+    
+    
+        jLabelDuracionActual.setText(perfil.getDuracionCicloMS() + " ms");
+        jLabelPoliticaActual.setText(perfil.getPoliticaInicial().toString());
+    }
+
+
+ 
+    private void setPoliticaEnCombo(Planificador.PoliticaPlanificacion politica) {
+        switch (politica) {
+            case FCFS:
+                comboPolitica.setSelectedItem("FCFS");
+                break;
+            case RR:
+                comboPolitica.setSelectedItem("Round Robin");
+                break;
+            case SPN:
+                comboPolitica.setSelectedItem("SPN");
+                break;
+            case SRT:
+                comboPolitica.setSelectedItem("SRT");
+                break;
+            case HRRN:
+                comboPolitica.setSelectedItem("HRRN");
+                break;
+            case FEEDBACK:
+                comboPolitica.setSelectedItem("Feedback");
+                break;
+            default:
+                comboPolitica.setSelectedIndex(0); // FCFS por defecto
+        }
+    }
     
     
     public JTable getTablaListos() {
@@ -629,15 +737,18 @@ public class Interfaz extends javax.swing.JFrame {
         aplicarTiempo = new javax.swing.JButton();
         jPanel4 = new javax.swing.JPanel();
         btnGuardarPerfil1 = new javax.swing.JButton();
+        jLabel29 = new javax.swing.JLabel();
         panelGraficos = new javax.swing.JPanel();
         btnGrafTurnaround = new javax.swing.JButton();
         btnGrafUsoCPU = new javax.swing.JButton();
         jLabel27 = new javax.swing.JLabel();
         btnGrafUsoCPU1 = new javax.swing.JButton();
         jLabel28 = new javax.swing.JLabel();
+        btnGrafEspera = new javax.swing.JButton();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
 
+        panelCPU.setBackground(new java.awt.Color(204, 255, 255));
         panelCPU.setBorder(javax.swing.BorderFactory.createLineBorder(new java.awt.Color(0, 0, 0)));
 
         jLabel1.setFont(new java.awt.Font("Helvetica Neue", 1, 18)); // NOI18N
@@ -761,6 +872,7 @@ public class Interfaz extends javax.swing.JFrame {
                 .addContainerGap(16, Short.MAX_VALUE))
         );
 
+        jPanel1.setBackground(new java.awt.Color(204, 204, 255));
         jPanel1.setBorder(javax.swing.BorderFactory.createLineBorder(new java.awt.Color(0, 0, 0)));
 
         jLabel7.setFont(new java.awt.Font("Helvetica Neue", 1, 18)); // NOI18N
@@ -917,6 +1029,7 @@ public class Interfaz extends javax.swing.JFrame {
         jLabel12.setFont(new java.awt.Font("Helvetica Neue", 3, 18)); // NOI18N
         jLabel12.setText("Cola Terminados");
 
+        panelEstadoGlobal.setBackground(new java.awt.Color(204, 204, 255));
         panelEstadoGlobal.setBorder(javax.swing.BorderFactory.createLineBorder(new java.awt.Color(0, 0, 0)));
 
         jLabel13.setFont(new java.awt.Font("Helvetica Neue", 1, 18)); // NOI18N
@@ -979,6 +1092,7 @@ public class Interfaz extends javax.swing.JFrame {
                 .addContainerGap(18, Short.MAX_VALUE))
         );
 
+        jPanel3.setBackground(new java.awt.Color(204, 255, 255));
         jPanel3.setBorder(javax.swing.BorderFactory.createLineBorder(new java.awt.Color(0, 0, 0)));
 
         jLabel17.setFont(new java.awt.Font("Helvetica Neue", 1, 18)); // NOI18N
@@ -996,13 +1110,14 @@ public class Interfaz extends javax.swing.JFrame {
         jPanel3Layout.setHorizontalGroup(
             jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanel3Layout.createSequentialGroup()
-                .addGap(15, 15, 15)
-                .addComponent(jScrollPane2, javax.swing.GroupLayout.PREFERRED_SIZE, 185, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGroup(jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(jPanel3Layout.createSequentialGroup()
+                        .addGap(15, 15, 15)
+                        .addComponent(jScrollPane2, javax.swing.GroupLayout.PREFERRED_SIZE, 185, javax.swing.GroupLayout.PREFERRED_SIZE))
+                    .addGroup(jPanel3Layout.createSequentialGroup()
+                        .addGap(40, 40, 40)
+                        .addComponent(jLabel17)))
                 .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel3Layout.createSequentialGroup()
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                .addComponent(jLabel17)
-                .addGap(40, 40, 40))
         );
         jPanel3Layout.setVerticalGroup(
             jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -1010,10 +1125,11 @@ public class Interfaz extends javax.swing.JFrame {
                 .addGap(14, 14, 14)
                 .addComponent(jLabel17)
                 .addGap(18, 18, 18)
-                .addComponent(jScrollPane2, javax.swing.GroupLayout.PREFERRED_SIZE, 179, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(28, Short.MAX_VALUE))
+                .addComponent(jScrollPane2, javax.swing.GroupLayout.PREFERRED_SIZE, 230, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addContainerGap(15, Short.MAX_VALUE))
         );
 
+        jPanel2.setBackground(new java.awt.Color(204, 204, 255));
         jPanel2.setBorder(javax.swing.BorderFactory.createLineBorder(new java.awt.Color(0, 0, 0)));
 
         jLabel18.setFont(new java.awt.Font("Helvetica Neue", 1, 18)); // NOI18N
@@ -1131,6 +1247,7 @@ public class Interfaz extends javax.swing.JFrame {
                         .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))))
         );
 
+        panelEstadoGlobal1.setBackground(new java.awt.Color(204, 204, 255));
         panelEstadoGlobal1.setBorder(javax.swing.BorderFactory.createLineBorder(new java.awt.Color(0, 0, 0)));
 
         jLabel24.setFont(new java.awt.Font("Helvetica Neue", 1, 18)); // NOI18N
@@ -1194,14 +1311,18 @@ public class Interfaz extends javax.swing.JFrame {
                 .addContainerGap(26, Short.MAX_VALUE))
         );
 
+        jPanel4.setBackground(new java.awt.Color(204, 255, 255));
         jPanel4.setBorder(javax.swing.BorderFactory.createLineBorder(new java.awt.Color(0, 0, 0)));
 
-        btnGuardarPerfil1.setText("Guardar perfil a JSON");
+        btnGuardarPerfil1.setText("Cargar JSON");
         btnGuardarPerfil1.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 btnGuardarPerfil1ActionPerformed(evt);
             }
         });
+
+        jLabel29.setFont(new java.awt.Font("Helvetica Neue", 1, 18)); // NOI18N
+        jLabel29.setText("Carga de archivo");
 
         javax.swing.GroupLayout jPanel4Layout = new javax.swing.GroupLayout(jPanel4);
         jPanel4.setLayout(jPanel4Layout);
@@ -1209,15 +1330,21 @@ public class Interfaz extends javax.swing.JFrame {
             jPanel4Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel4Layout.createSequentialGroup()
                 .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addComponent(jLabel29)
+                .addGap(37, 37, 37))
+            .addGroup(jPanel4Layout.createSequentialGroup()
+                .addGap(55, 55, 55)
                 .addComponent(btnGuardarPerfil1)
-                .addGap(26, 26, 26))
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
         jPanel4Layout.setVerticalGroup(
             jPanel4Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(jPanel4Layout.createSequentialGroup()
-                .addGap(39, 39, 39)
+            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel4Layout.createSequentialGroup()
+                .addContainerGap(11, Short.MAX_VALUE)
+                .addComponent(jLabel29)
+                .addGap(18, 18, 18)
                 .addComponent(btnGuardarPerfil1)
-                .addContainerGap(38, Short.MAX_VALUE))
+                .addGap(25, 25, 25))
         );
 
         javax.swing.GroupLayout panelSimuladorLayout = new javax.swing.GroupLayout(panelSimulador);
@@ -1233,28 +1360,24 @@ public class Interfaz extends javax.swing.JFrame {
                     .addComponent(panelEstadoGlobal1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
                 .addGap(48, 48, 48)
                 .addGroup(panelSimuladorLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addGroup(panelSimuladorLayout.createSequentialGroup()
-                        .addGroup(panelSimuladorLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addGroup(panelSimuladorLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                                .addComponent(jScrollPane6)
-                                .addComponent(jScrollPane5)
-                                .addComponent(jLabel10)
-                                .addComponent(jLabel9)
-                                .addComponent(jLabel11)
-                                .addComponent(jScrollPane8, javax.swing.GroupLayout.PREFERRED_SIZE, 582, javax.swing.GroupLayout.PREFERRED_SIZE))
-                            .addComponent(scrollLog, javax.swing.GroupLayout.PREFERRED_SIZE, 582, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addComponent(jScrollPane9, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.PREFERRED_SIZE, 582, javax.swing.GroupLayout.PREFERRED_SIZE))
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED, 32, Short.MAX_VALUE)
+                    .addGroup(panelSimuladorLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                         .addGroup(panelSimuladorLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                            .addComponent(panelCPU, javax.swing.GroupLayout.PREFERRED_SIZE, 220, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addComponent(jPanel3, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                            .addComponent(jPanel4, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-                        .addGap(57, 57, 57))
-                    .addGroup(panelSimuladorLayout.createSequentialGroup()
-                        .addGroup(panelSimuladorLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(jLabel8)
-                            .addComponent(jLabel12))
-                        .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))))
+                            .addComponent(jScrollPane6)
+                            .addComponent(jScrollPane5)
+                            .addComponent(jLabel10)
+                            .addComponent(jLabel9)
+                            .addComponent(jLabel11)
+                            .addComponent(jScrollPane8, javax.swing.GroupLayout.PREFERRED_SIZE, 582, javax.swing.GroupLayout.PREFERRED_SIZE))
+                        .addComponent(scrollLog, javax.swing.GroupLayout.PREFERRED_SIZE, 582, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addComponent(jScrollPane9, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.PREFERRED_SIZE, 582, javax.swing.GroupLayout.PREFERRED_SIZE))
+                    .addComponent(jLabel8)
+                    .addComponent(jLabel12))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED, 40, Short.MAX_VALUE)
+                .addGroup(panelSimuladorLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                    .addComponent(panelCPU, javax.swing.GroupLayout.PREFERRED_SIZE, 220, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(jPanel3, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .addComponent(jPanel4, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addGap(49, 49, 49))
         );
         panelSimuladorLayout.setVerticalGroup(
             panelSimuladorLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -1262,44 +1385,45 @@ public class Interfaz extends javax.swing.JFrame {
                 .addContainerGap()
                 .addGroup(panelSimuladorLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
                     .addGroup(panelSimuladorLayout.createSequentialGroup()
-                        .addGap(6, 6, 6)
-                        .addComponent(jLabel8)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addGroup(panelSimuladorLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(jScrollPane5, javax.swing.GroupLayout.PREFERRED_SIZE, 92, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addComponent(panelCPU, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                        .addGroup(panelSimuladorLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addGroup(panelSimuladorLayout.createSequentialGroup()
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(jLabel10)
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(scrollLog, javax.swing.GroupLayout.PREFERRED_SIZE, 92, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                .addGap(30, 30, 30)
-                                .addComponent(jLabel11)
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(jScrollPane8, javax.swing.GroupLayout.PREFERRED_SIZE, 92, javax.swing.GroupLayout.PREFERRED_SIZE))
-                            .addGroup(panelSimuladorLayout.createSequentialGroup()
-                                .addGap(27, 27, 27)
-                                .addComponent(jPanel3, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)))
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                        .addComponent(jLabel12)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addGroup(panelSimuladorLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(jPanel4, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addComponent(jScrollPane9, javax.swing.GroupLayout.PREFERRED_SIZE, 92, javax.swing.GroupLayout.PREFERRED_SIZE)))
-                    .addGroup(panelSimuladorLayout.createSequentialGroup()
                         .addGroup(panelSimuladorLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
                             .addGroup(panelSimuladorLayout.createSequentialGroup()
                                 .addComponent(jLabel9)
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                                 .addComponent(jScrollPane6, javax.swing.GroupLayout.PREFERRED_SIZE, 92, javax.swing.GroupLayout.PREFERRED_SIZE))
-                            .addComponent(jPanel2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                            .addComponent(jPanel2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                            .addComponent(panelCPU, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
                         .addGap(18, 18, 18)
                         .addComponent(jPanel1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addGap(11, 11, 11)
                         .addComponent(panelEstadoGlobal, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addGap(18, 18, 18)
-                        .addComponent(panelEstadoGlobal1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)))
+                        .addComponent(panelEstadoGlobal1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, panelSimuladorLayout.createSequentialGroup()
+                        .addGroup(panelSimuladorLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
+                            .addComponent(jPanel4, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                            .addGroup(javax.swing.GroupLayout.Alignment.LEADING, panelSimuladorLayout.createSequentialGroup()
+                                .addGap(6, 6, 6)
+                                .addComponent(jLabel8)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(jScrollPane5, javax.swing.GroupLayout.PREFERRED_SIZE, 92, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addGap(183, 183, 183)
+                                .addGroup(panelSimuladorLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                                    .addGroup(panelSimuladorLayout.createSequentialGroup()
+                                        .addComponent(jLabel10)
+                                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                        .addComponent(scrollLog, javax.swing.GroupLayout.PREFERRED_SIZE, 92, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                        .addGap(30, 30, 30)
+                                        .addComponent(jLabel11)
+                                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                        .addComponent(jScrollPane8, javax.swing.GroupLayout.PREFERRED_SIZE, 92, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                                        .addComponent(jLabel12)
+                                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                        .addComponent(jScrollPane9, javax.swing.GroupLayout.PREFERRED_SIZE, 92, javax.swing.GroupLayout.PREFERRED_SIZE))
+                                    .addGroup(panelSimuladorLayout.createSequentialGroup()
+                                        .addComponent(jPanel3, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                        .addGap(0, 0, Short.MAX_VALUE)))))
+                        .addGap(10, 10, 10)))
                 .addGap(0, 46, Short.MAX_VALUE))
         );
 
@@ -1335,6 +1459,14 @@ public class Interfaz extends javax.swing.JFrame {
         jLabel28.setFont(new java.awt.Font("Helvetica Neue", 1, 18)); // NOI18N
         jLabel28.setText("Métricas");
 
+        btnGrafEspera.setFont(new java.awt.Font("Helvetica Neue", 0, 14)); // NOI18N
+        btnGrafEspera.setText("Ver gráfica de tiempo de espera");
+        btnGrafEspera.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                btnGrafEsperaActionPerformed(evt);
+            }
+        });
+
         javax.swing.GroupLayout panelGraficosLayout = new javax.swing.GroupLayout(panelGraficos);
         panelGraficos.setLayout(panelGraficosLayout);
         panelGraficosLayout.setHorizontalGroup(
@@ -1342,13 +1474,18 @@ public class Interfaz extends javax.swing.JFrame {
             .addGroup(panelGraficosLayout.createSequentialGroup()
                 .addGap(49, 49, 49)
                 .addGroup(panelGraficosLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(btnGrafUsoCPU1, javax.swing.GroupLayout.PREFERRED_SIZE, 408, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addComponent(jLabel28)
-                    .addGroup(panelGraficosLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                        .addComponent(jLabel27)
-                        .addComponent(btnGrafTurnaround, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                        .addComponent(btnGrafUsoCPU, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)))
-                .addContainerGap(845, Short.MAX_VALUE))
+                    .addGroup(panelGraficosLayout.createSequentialGroup()
+                        .addComponent(btnGrafTurnaround)
+                        .addGap(57, 57, 57)
+                        .addComponent(btnGrafEspera, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .addGap(425, 425, 425))
+                    .addGroup(panelGraficosLayout.createSequentialGroup()
+                        .addGroup(panelGraficosLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                            .addComponent(jLabel28)
+                            .addComponent(jLabel27)
+                            .addComponent(btnGrafUsoCPU, javax.swing.GroupLayout.DEFAULT_SIZE, 408, Short.MAX_VALUE)
+                            .addComponent(btnGrafUsoCPU1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                        .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))))
         );
         panelGraficosLayout.setVerticalGroup(
             panelGraficosLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -1356,7 +1493,9 @@ public class Interfaz extends javax.swing.JFrame {
                 .addGap(37, 37, 37)
                 .addComponent(jLabel27)
                 .addGap(32, 32, 32)
-                .addComponent(btnGrafTurnaround, javax.swing.GroupLayout.PREFERRED_SIZE, 61, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGroup(panelGraficosLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(btnGrafTurnaround, javax.swing.GroupLayout.PREFERRED_SIZE, 61, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(btnGrafEspera, javax.swing.GroupLayout.PREFERRED_SIZE, 61, javax.swing.GroupLayout.PREFERRED_SIZE))
                 .addGap(18, 18, 18)
                 .addComponent(btnGrafUsoCPU, javax.swing.GroupLayout.PREFERRED_SIZE, 61, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addGap(34, 34, 34)
@@ -1410,7 +1549,7 @@ public class Interfaz extends javax.swing.JFrame {
 
     private void btnGuardarPerfil1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnGuardarPerfil1ActionPerformed
         // TODO add your handling code here:
-         guardarPerfilActualEnJSON();
+        cargarPerfilDesdeJSON();
     }//GEN-LAST:event_btnGuardarPerfil1ActionPerformed
 
     private void btnGrafUsoCPU1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnGrafUsoCPU1ActionPerformed
@@ -1433,6 +1572,30 @@ public class Interfaz extends javax.swing.JFrame {
         JOptionPane.INFORMATION_MESSAGE
     ); 
     }//GEN-LAST:event_btnGrafUsoCPU1ActionPerformed
+
+    private void btnGrafEsperaActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnGrafEsperaActionPerformed
+        // TODO add your handling code here:
+        if (this.kernel == null) {
+            JOptionPane.showMessageDialog(this, 
+                "El simulador no se ha iniciado.", 
+                "Error", 
+                JOptionPane.ERROR_MESSAGE);
+            return;
+            }
+
+            Cola<PCB> colaTerminados = this.kernel.getMemoria().getTerminadosCola();
+
+   
+            if (colaTerminados == null || colaTerminados.esVacia()) {
+                JOptionPane.showMessageDialog(this, 
+                    "Aún no hay procesos terminados para graficar.", 
+                    "Sin Datos", 
+                    JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+        Graficos.GraficarSimulacion.graficaTiempoEspera(colaTerminados);
+
+    }//GEN-LAST:event_btnGrafEsperaActionPerformed
 
     /**
      * @param args the command line arguments
@@ -1470,6 +1633,7 @@ public class Interfaz extends javax.swing.JFrame {
     private javax.swing.JTextArea areaLog;
     private javax.swing.JProgressBar barraUsoCPU;
     private javax.swing.JButton btnCrearProceso;
+    private javax.swing.JButton btnGrafEspera;
     private javax.swing.JButton btnGrafTurnaround;
     private javax.swing.JButton btnGrafUsoCPU;
     private javax.swing.JButton btnGrafUsoCPU1;
@@ -1499,6 +1663,7 @@ public class Interfaz extends javax.swing.JFrame {
     private javax.swing.JLabel jLabel26;
     private javax.swing.JLabel jLabel27;
     private javax.swing.JLabel jLabel28;
+    private javax.swing.JLabel jLabel29;
     private javax.swing.JLabel jLabel3;
     private javax.swing.JLabel jLabel4;
     private javax.swing.JLabel jLabel5;

@@ -1,0 +1,35 @@
+{
+  "duracionCicloMS": 100,
+  "duracionBloqueoIO": 5,
+  "quantumRR": 4,
+  "politicaInicial": "RR",
+  "rafagaCPUDefault": 10,
+  "ioCadaNDefault": 3,
+  "prioridadBase": 1,
+  "procesos": [
+    {
+      "nombre": "Proceso-A (I/O)",
+      "rafagaInicial": 20,
+      "prioridad": 2,
+      "llegada": 0,
+      "ioCadaN": 4,
+      "duracionES": 5
+    },
+    {
+      "nombre": "Proceso-B (CPU)",
+      "rafagaInicial": 15,
+      "prioridad": 1,
+      "llegada": 2,
+      "ioCadaN": 0,
+      "duracionES": 0
+    },
+    {
+      "nombre": "Proceso-C (Mixto)",
+      "rafagaInicial": 10,
+      "prioridad": 2,
+      "llegada": 4,
+      "ioCadaN": 3,
+      "duracionES": 3
+    }
+  ]
+}

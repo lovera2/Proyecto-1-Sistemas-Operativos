@@ -49,7 +49,7 @@ public class GraficarSimulacion {
 
         // Creacion de gráfico de barras
         JFreeChart grafico = ChartFactory.createBarChart3D(
-            "Turnaround por Proceso",
+            "Procesos completados por unidad de tiempo",
             "Proceso",
             "Ciclos de Turnaround",
             dataset,
@@ -94,6 +94,49 @@ public class GraficarSimulacion {
         );
 
         mostrarEnVentana(grafico, "Uso de CPU (%)");
+    }
+    
+    /**
+     * Grafica el Tiempo de Espera total de cada proceso terminado.
+     * Útil para medir la equidad (fairness) del planificador.
+     *
+     * @param terminados Cola de procesos que han finalizado.
+     */
+    public static void graficaTiempoEspera(Cola<PCB> terminados) {
+
+        // Dataset de barras
+        DefaultCategoryDataset dataset = new DefaultCategoryDataset();
+        Cola<PCB> backup = new Cola<PCB>();
+
+        while (!terminados.esVacia()) {
+            PCB p = terminados.desencolar();
+            backup.encolar(p);
+
+            // Obtenemos el tiempo de espera (asumimos que p.getTiempoEspera() existe)
+            int tEsp = p.getTiempoEspera();
+            
+            // addValue(valor, fila/serie, columna/categoría)
+            dataset.addValue(tEsp, p.getNombre(), "Espera");
+        }
+
+        // Restaurar la cola tal como estaba
+        while (!backup.esVacia()) {
+            terminados.encolar(backup.desencolar());
+        }
+
+        // Creacion de gráfico de barras
+        JFreeChart grafico = ChartFactory.createBarChart3D(
+            "Tiempo de Espera por Proceso (Equidad)",
+            "Proceso",
+            "Ciclos de Espera",
+            dataset,
+            PlotOrientation.VERTICAL,
+            true,   // legend
+            true,   // tooltips
+            false   // urls
+        );
+
+        mostrarEnVentana(grafico, "Tiempo de Espera por Proceso");
     }
 
     /**

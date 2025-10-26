@@ -18,7 +18,7 @@ public class MemoriaPrincipal {
     private Cola<PCB> listosSuspendidos;
     private Cola<PCB> bloqueadosSuspendidos;
 
-    /* Mutex para acceso exclusivo a las colas */
+    // Mutex para acceso exclusivo a las colas
     private final Semaphore mutexMemoria;
 
     /**
@@ -232,10 +232,10 @@ public class MemoriaPrincipal {
         try {
             mutexMemoria.acquire();
 
-            /* Lo saco de donde esté actualmente */
+            // Lo saco de donde esté actualmente
             removerDeCualquierColaSinLock(p);
 
-            /* Según su estado actual, lo paso a la cola suspendida apropiada */
+            // Según su estado actual, lo paso a la cola suspendida apropiada
             if (p.getEstado() == Estado.LISTO) {
                 p.setEstado(Estado.LISTO_SUSPENDIDO);
                 listosSuspendidos.encolar(p);
@@ -243,7 +243,7 @@ public class MemoriaPrincipal {
                 p.setEstado(Estado.BLOQUEADO_SUSPENDIDO);
                 bloqueadosSuspendidos.encolar(p);
             } else {
-                /* No hacemos nada si no aplica suspensión en ese estado */
+                // No hacemos nada si no aplica suspensión en ese estado
             }
 
         } catch (InterruptedException e) {
